@@ -84,7 +84,7 @@ class AuthApi {
 
     final apiResponse = ApiResponse<void>.fromJson(
       response.data as Map<String, dynamic>,
-      (json) => null,
+      (json) {},
     );
 
     if (apiResponse.code != 0) {
@@ -123,7 +123,7 @@ class AuthApi {
 
     final apiResponse = ApiResponse<void>.fromJson(
       response.data as Map<String, dynamic>,
-      (json) => null,
+      (json) {},
     );
 
     if (apiResponse.code != 0) {

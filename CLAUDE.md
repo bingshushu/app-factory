@@ -130,7 +130,7 @@ app-factory/
 │   │   ├── src/
 │   │   ├── pom.xml
 │   │   └── Dockerfile
-│   ├── gateway/            # API 网关 (Spring Cloud Gateway)
+│   ├── gateway/            # API 网关 (Spring Cloud Gateway) ✅
 │   ├── ws-service/         # 长链接服务 (WebSocket / STOMP)
 │   ├── file-service/       # 文件服务 (上传、下载、MinIO 对接)
 │   ├── notification-service/ # 通知服务 (推送、站内信)
@@ -149,13 +149,13 @@ app-factory/
 
 ### 微服务职责划分
 
-| 服务 | 职责 | 端口 | 数据库 |
-|------|------|------|--------|
-| gateway | API 路由、限流、认证转发 | 8080 | 无 |
-| user-service | 注册、登录、JWT 签发/刷新、OAuth、用户 CRUD | 8081 | user_db |
-| ws-service | WebSocket 长链接、实时消息推送、在线状态 | 8082 | 共享 Redis |
-| file-service | 文件上传/下载、图片处理、MinIO 对接 | 8083 | file_db |
-| notification-service | 推送通知 (FCM/APNs)、站内信、消息模板 | 8084 | notification_db |
+| 服务 | 职责 | 端口 | 数据库 | 状态 |
+|------|------|------|--------|------|
+| gateway | API 路由、限流、JWT 认证验证、CORS | 8080 | Redis (限流) | ✅ |
+| user-service | 注册、登录、JWT 签发/刷新、OAuth、用户 CRUD | 8081 | user_db | ✅ |
+| ws-service | WebSocket 长链接、实时消息推送、在线状态 | 8082 | 共享 Redis | 待开发 |
+| file-service | 文件上传/下载、图片处理、MinIO 对接 | 8083 | file_db | 待开发 |
+| notification-service | 推送通知 (FCM/APNs)、站内信、消息模板 | 8084 | notification_db | 待开发 |
 
 ### 微服务通信
 
@@ -163,6 +163,55 @@ app-factory/
 - **异步**: 通过 Redis Pub/Sub 或 RabbitMQ/Kafka 解耦事件 (如用户注册后发送通知)
 - **服务发现**: K8s Service DNS (无需 Eureka/Nacos)
 - **配置管理**: K8s ConfigMap + Secret (无需 Spring Cloud Config)
+
+### Gateway 服务详情 ✅
+
+API Gateway 是所有客户端请求的统一入口，基于 Spring Cloud Gateway 实现。
+
+**核心功能：**
+- **路由转发**: 根据路径将请求转发到对应微服务
+- **JWT 认证**: 全局过滤器验证 Token，提取用户信息到请求头
+- **请求限流**: 基于 Redis 的分布式限流（IP/用户维度）
+- **CORS 配置**: 统一跨域处理
+
+**路由规则：**
+```yaml
+路径                      → 目标服务           认证要求
+/api/v1/auth/**          → user-service      公开
+/api/v1/users/**         → user-service      需认证
+/api/v1/profile/**       → user-service      需认证
+/api/v1/ws/**            → ws-service        需认证
+/api/v1/files/**         → file-service      需认证
+/api/v1/notifications/** → notification-service 需认证
+```
+
+**请求头传递：**
+Gateway 验证 JWT 后，向下游服务传递以下请求头：
+- `X-User-Id`: 用户 ID
+- `X-User-Email`: 用户邮箱
+- `X-App-Id`: 应用 ID
+- `X-User-Roles`: 用户角色
+- `X-Gateway`: 标识请求来自 Gateway
+
+**启动 Gateway：**
+```bash
+# 开发模式（需要先启动 Redis）
+cd server/gateway && mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
+# Docker Compose 启动全部服务
+docker compose up -d
+
+# 仅构建 Gateway
+cd server && mvn clean package -pl gateway -am -DskipTests
+```
+
+**环境变量：**
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `REDIS_HOST` | localhost | Redis 地址 |
+| `REDIS_PORT` | 6379 | Redis 端口 |
+| `JWT_SECRET` | - | JWT 签名密钥（生产环境必须配置） |
+| `USER_SERVICE_URL` | http://localhost:8081 | User Service 地址 |
 
 ## Build Commands
 
@@ -210,9 +259,13 @@ cd server
 cd server && mvn clean package -DskipTests
 
 # 构建单个微服务
-cd server && mvn clean package -pl user-service -am
+cd server && mvn clean package -pl gateway -am -DskipTests
+cd server && mvn clean package -pl user-service -am -DskipTests
 
-# 运行单个微服务 (本地开发)
+# 运行 Gateway (本地开发，需要先启动 Redis)
+cd server/gateway && mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
+# 运行 User Service (本地开发)
 cd server/user-service && mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
@@ -286,13 +339,29 @@ cd deploy && skaffold dev
 ## Server Commands
 
 ```bash
-# === Docker ===
+# === Docker Compose (本地开发，推荐) ===
 
-# 构建所有微服务镜像
+# 🚀 一键启动所有服务（自动构建，无需本地 Java 环境）
+docker compose up -d --build
+
+# 仅启动基础设施（数据库和缓存）
+docker compose up -d postgres redis
+
+# 查看服务日志
+docker compose logs -f gateway
+docker compose logs -f user-service
+
+# 停止所有服务
+docker compose down
+
+# === Docker 镜像构建 ===
+
+# 构建所有微服务镜像（在 Docker 内完成 Maven 构建）
 docker compose build
 
 # 构建单个服务镜像
-docker build -t app-factory/user-service:latest server/user-service
+docker build -t app-factory/gateway:latest -f gateway/Dockerfile server/
+docker build -t app-factory/user-service:latest -f user-service/Dockerfile server/
 
 # === Kubernetes ===
 
@@ -304,6 +373,7 @@ kubectl apply -k deploy/overlays/prod
 
 # 查看服务状态
 kubectl get pods -n app-factory
+kubectl logs -f deployment/gateway -n app-factory
 kubectl logs -f deployment/user-service -n app-factory
 
 # 端口转发 (本地调试)
@@ -329,11 +399,22 @@ cd server/user-service && mvn flyway:migrate -Dflyway.configFiles=src/main/resou
 ❌ `cd packages/xxx && dart run build_runner build` - 不要手动切换目录
 
 #### 正确的操作
-✅ `melos bootstrap` - 安装所有依赖
+
+**基础命令：**
+✅ `melos bootstrap` - 安装所有依赖（会自动运行代码生成）
 ✅ `melos run generate` - 生成所有代码
+✅ `melos run generate:watch` - 监听模式生成代码
 ✅ `melos run test` - 运行所有测试
+✅ `melos run test:coverage` - 运行测试并生成覆盖率报告
 ✅ `melos run analyze` - 分析所有代码
 ✅ `melos run format` - 格式化所有代码
+✅ `melos run format:check` - 检查代码格式（CI 用）
+✅ `melos run clean` - 清理所有包
+✅ `melos run outdated` - 检查过期依赖
+
+**CI 优化命令：**
+✅ `melos run analyze:ci` - 仅分析变更的包
+✅ `melos run test:ci` - 仅测试变更的包
 
 #### 为什么必须使用 Melos？
 1. **自动处理 workspace 依赖**：Melos 会正确链接本地包
@@ -369,7 +450,7 @@ dependency_overrides:
 
 ```yaml
 environment:
-  sdk: ^3.8.0  # 最新 Dart SDK
+  sdk: ^3.8.0  # 最新 Dart SDK（已更新）
   flutter: ">=3.24.0"
 
 dependencies:
@@ -414,7 +495,7 @@ name: app_factory
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.8.0  # 已更新到最新版本
 
 workspace:
   - apps/one
@@ -430,12 +511,104 @@ dev_dependencies:
 # 关键：解决 Riverpod 3.x 与 build_runner 冲突
 dependency_overrides:
   analyzer: 8.4.1
+
+# Melos 配置
+melos:
+  # Bootstrap 生命周期 hooks
+  command:
+    bootstrap:
+      hooks:
+        post: melos run generate  # 自动生成代码
+
+  scripts:
+    # 代码分析
+    analyze:
+      exec: flutter analyze .
+      description: Run static analysis
+      packageFilters:
+        flutter: true
+
+    analyze:ci:
+      exec: flutter analyze .
+      description: Analyze changed packages only (CI optimized)
+      packageFilters:
+        diff: origin/main...HEAD
+        flutter: true
+
+    # 测试
+    test:
+      exec: flutter test
+      description: Run tests
+      packageFilters:
+        flutter: true
+        dirExists: test
+
+    test:ci:
+      exec: flutter test
+      description: Test changed packages only (CI optimized)
+      packageFilters:
+        diff: origin/main...HEAD
+        flutter: true
+        dirExists: test
+
+    test:coverage:
+      exec: flutter test --coverage
+      description: Run tests with coverage
+      packageFilters:
+        flutter: true
+        dirExists: test
+
+    # 代码格式化
+    format:
+      exec: dart format .
+      description: Format code
+
+    format:check:
+      exec: dart format . --set-exit-if-changed
+      description: Check code formatting (CI)
+
+    # 代码生成
+    generate:
+      exec: dart run build_runner build --delete-conflicting-outputs
+      description: Run code generation
+      concurrency: 1  # 避免并发冲突
+      packageFilters:
+        dependsOn: build_runner
+
+    generate:watch:
+      exec: dart run build_runner watch --delete-conflicting-outputs
+      description: Watch and generate code on changes
+      packageFilters:
+        dependsOn: build_runner
+
+    # 依赖管理
+    get:
+      run: melos bootstrap
+      description: Install dependencies for all packages
+
+    outdated:
+      exec: flutter pub outdated
+      description: Check for outdated dependencies
+      packageFilters:
+        flutter: true
+
+    # 清理
+    clean:
+      run: melos exec -- flutter clean
+      description: Clean all packages
+
+    clean:deep:
+      run: |
+        melos exec -- flutter clean
+        melos exec -- rm -rf .dart_tool
+        rm -rf .dart_tool
+      description: Deep clean all packages and root
 ```
 
 #### 检查依赖更新
 ```bash
-# 检查过期的依赖
-melos exec -- flutter pub outdated
+# 检查过期的依赖（使用新的 Melos script）
+melos run outdated
 
 # 更新依赖到最新版本
 # 1. 手动更新 pubspec.yaml 中的版本号
@@ -444,8 +617,8 @@ melos exec -- flutter pub outdated
 
 #### 添加新依赖的流程
 1. 在对应包的 `pubspec.yaml` 中添加依赖（使用最新版本）
-2. 运行 `melos bootstrap` 安装依赖
-3. 如果需要代码生成，运行 `melos run generate`
+2. 运行 `melos bootstrap` 安装依赖（会自动运行代码生成）
+3. 如果需要手动生成代码，运行 `melos run generate`
 
 ### Package 依赖规则
 - 使用 Dart Pub Workspaces，本地包依赖无需指定 path，直接写包名即可
@@ -512,11 +685,34 @@ user-service/src/main/java/com/appfactory/user/
 3. 依赖 `common` 模块获取公共工具类和异常定义
 4. 创建数据库: `CREATE DATABASE new_service_db;`
 5. 添加 Flyway 迁移脚本 `V1__init.sql`
-6. 编写 Dockerfile (可复用已有模板)
+6. 复制 Dockerfile 模板（只需改服务名和端口，见下方模板）
 7. 在 `deploy/base/` 下添加 K8s Deployment + Service YAML
 8. 在 Gateway 中添加路由规则
 9. 在 `api_client` Flutter 包中添加对应的 API 封装
 10. 更新 `docker-compose.yaml` 添加本地开发配置
+
+**Dockerfile 模板（新增微服务时直接复制，改服务名和端口即可）：**
+```dockerfile
+# 多阶段构建 - {Service Name}
+# 新增微服务时无需修改此文件结构
+
+FROM maven:3.9-eclipse-temurin-21 AS builder
+WORKDIR /app
+COPY . .
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn clean package -pl {service-name} -am -DskipTests -q
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+COPY --from=builder /app/{service-name}/target/*.jar app.jar
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:{port}/actuator/health || exit 1
+EXPOSE {port}
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+```
 
 ### 共享组件扩展规则
 - 新增通用功能优先添加到 packages/ 而非单个 App
@@ -1143,6 +1339,43 @@ dart run build_runner watch --delete-conflicting-outputs
 melos run generate  # 需在 melos.yaml 中配置
 ```
 
+## Docker 构建最佳实践
+
+### Dockerfile 设计原则
+
+本项目的 Dockerfile 采用以下设计：
+
+1. **多阶段构建**: 构建阶段使用 Maven 镜像，运行阶段使用精简 JRE 镜像
+2. **COPY . .**: 复制整个 server 目录，新增模块无需改 Dockerfile
+3. **.dockerignore**: 排除 `target/`、`.idea/` 等，保持 context 精简
+4. **BuildKit 缓存**: `--mount=type=cache` 缓存 Maven 依赖，加速增量构建
+5. **非 root 用户**: 创建 spring 用户运行应用，提升安全性
+
+### server/.dockerignore
+
+```
+**/target/
+**/.idea/
+**/*.iml
+**/.git/
+**/.gitignore
+**/logs/
+**/*.log
+```
+
+### 使用方式
+
+```bash
+# 一键启动（推荐，无需本地 Java 环境）
+docker compose up -d --build
+
+# 仅重建某个服务
+docker compose up -d --build gateway
+
+# 查看构建日志
+docker compose build --progress=plain gateway
+```
+
 ## Docker Compose (本地开发)
 
 ```yaml
@@ -1153,81 +1386,64 @@ services:
     environment:
       POSTGRES_USER: appfactory
       POSTGRES_PASSWORD: devpassword
-      POSTGRES_DB: appfactory
+      POSTGRES_DB: user_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./server/scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appfactory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   gateway:
-    build: server/gateway
+    build:
+      context: ./server
+      dockerfile: gateway/Dockerfile
     ports:
       - "8080:8080"
-    depends_on:
-      - user-service
-      - ws-service
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - REDIS_HOST=redis
+      - JWT_SECRET=dev-secret-key-for-testing-only-min-256-bits-long
+      - USER_SERVICE_URL=http://user-service:8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_started
 
   user-service:
-    build: server/user-service
+    build:
+      context: ./server
+      dockerfile: user-service/Dockerfile
     ports:
       - "8081:8081"
-    depends_on:
-      - postgres
-      - redis
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_db
-
-  ws-service:
-    build: server/ws-service
-    ports:
-      - "8082:8082"
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/user_db
+      - DATABASE_USERNAME=appfactory
+      - DATABASE_PASSWORD=devpassword
+      - REDIS_HOST=redis
+      - JWT_SECRET=dev-secret-key-for-testing-only-min-256-bits-long
     depends_on:
-      - redis
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-
-  file-service:
-    build: server/file-service
-    ports:
-      - "8083:8083"
-    depends_on:
-      - postgres
-      - minio
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-
-  notification-service:
-    build: server/notification-service
-    ports:
-      - "8084:8084"
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
-  minio_data:
 ```

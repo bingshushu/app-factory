@@ -17,7 +17,12 @@
       "Bash(flutter clean:*)",
       "Bash(dart:*)",
       "Bash(done)",
-      "WebFetch(domain:riverpod.dev)"
+      "WebFetch(domain:riverpod.dev)",
+      "WebSearch",
+      "WebFetch(domain:lazebny.io)",
+      "Bash(melos:*)",
+      "Bash(mvn clean compile:*)",
+      "Bash(java -version:*)"
     ]
   }
 }

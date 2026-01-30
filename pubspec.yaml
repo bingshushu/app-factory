@@ -2,7 +2,7 @@ name: app_factory
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.8.0
 
 workspace:
   - apps/one
@@ -19,25 +19,91 @@ dependency_overrides:
   analyzer: 8.4.1
 
 melos:
+  command:
+    bootstrap:
+      hooks:
+        post: melos run generate
+
   scripts:
+    # 代码分析
     analyze:
       exec: flutter analyze .
       description: Run static analysis
       packageFilters:
         flutter: true
+
+    analyze:ci:
+      exec: flutter analyze .
+      description: Analyze changed packages only (CI optimized)
+      packageFilters:
+        diff: origin/main...HEAD
+        flutter: true
+
+    # 测试
     test:
       exec: flutter test
       description: Run tests
       packageFilters:
         flutter: true
+        dirExists: test
+
+    test:ci:
+      exec: flutter test
+      description: Test changed packages only (CI optimized)
+      packageFilters:
+        diff: origin/main...HEAD
+        flutter: true
+        dirExists: test
+
+    test:coverage:
+      exec: flutter test --coverage
+      description: Run tests with coverage
+      packageFilters:
+        flutter: true
+        dirExists: test
+
+    # 代码格式化
     format:
       exec: dart format .
       description: Format code
+
+    format:check:
+      exec: dart format . --set-exit-if-changed
+      description: Check code formatting (CI)
+
+    # 代码生成
     generate:
       exec: dart run build_runner build --delete-conflicting-outputs
       description: Run code generation
+      concurrency: 1
       packageFilters:
         dependsOn: build_runner
-      select-package:
-        ignore:
-          - app_factory
+
+    generate:watch:
+      exec: dart run build_runner watch --delete-conflicting-outputs
+      description: Watch and generate code on changes
+      packageFilters:
+        dependsOn: build_runner
+
+    # 依赖管理
+    get:
+      run: melos bootstrap
+      description: Install dependencies for all packages
+
+    outdated:
+      exec: flutter pub outdated
+      description: Check for outdated dependencies
+      packageFilters:
+        flutter: true
+
+    # 清理
+    clean:
+      run: melos exec -- flutter clean
+      description: Clean all packages
+
+    clean:deep:
+      run: |
+        melos exec -- flutter clean
+        melos exec -- rm -rf .dart_tool
+        rm -rf .dart_tool
+      description: Deep clean all packages and root

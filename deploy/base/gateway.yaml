@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: app-factory
+data:
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  USER_SERVICE_URL: "http://user-service:8081"
+  WS_SERVICE_URL: "http://ws-service:8082"
+  FILE_SERVICE_URL: "http://file-service:8083"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8084"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gateway-secret
+  namespace: app-factory
+type: Opaque
+stringData:
+  JWT_SECRET: "your-production-secret-key-min-256-bits-long-change-this"
+  REDIS_PASSWORD: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: app-factory
+  labels:
+    app: gateway
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+        version: v1
+    spec:
+      containers:
+        - name: gateway
+          image: app-factory/gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: gateway-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: gateway-config
+                  key: REDIS_PORT
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gateway-secret
+                  key: REDIS_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gateway-secret
+                  key: JWT_SECRET
+            - name: USER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gateway-config
+                  key: USER_SERVICE_URL
+            - name: WS_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gateway-config
+                  key: WS_SERVICE_URL
+            - name: FILE_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gateway-config
+                  key: FILE_SERVICE_URL
+            - name: NOTIFICATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gateway-config
+                  key: NOTIFICATION_SERVICE_URL
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: app-factory
+  labels:
+    app: gateway
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: gateway
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-hpa
+  namespace: app-factory
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

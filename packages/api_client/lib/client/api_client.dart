@@ -133,7 +133,7 @@ ApiClient apiClient(Ref ref) {
   // TODO: 从环境变量或配置中读取 baseUrl
   const baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.1.245:8081',
+    defaultValue: 'http://192.168.1.245:8080',
   );
 
   // getAccessToken 将在 core 包中通过 override 提供

@@ -175,3 +175,5 @@ MIT License
 
 **当前版本**: 1.0.0
 **最后更新**: 2026-01-30
+
+docker compose up -d --build

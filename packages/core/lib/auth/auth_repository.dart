@@ -1,12 +1,10 @@
 import 'package:api_client/api_client.dart';
 import 'package:dio/dio.dart';
-import 'package:logger/logger.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_models/shared_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../storage/token_storage.dart';
 import '../utils/result.dart';
-import 'auth_state.dart';
 
 part 'auth_repository.g.dart';
 

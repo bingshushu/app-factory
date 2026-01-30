@@ -1,0 +1,8 @@
+# 排除构建产物和不需要的文件
+**/target/
+**/.idea/
+**/*.iml
+**/.git/
+**/.gitignore
+**/logs/
+**/*.log
