@@ -1,0 +1,43 @@
+name: app_factory
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+workspace:
+  - apps/one
+  - packages/core
+  - packages/api_client
+  - packages/shared_models
+  - packages/ui_kit
+  - packages/auth_ui
+
+dev_dependencies:
+  melos: ^7.4.0
+
+dependency_overrides:
+  analyzer: 8.4.1
+
+melos:
+  scripts:
+    analyze:
+      exec: flutter analyze .
+      description: Run static analysis
+      packageFilters:
+        flutter: true
+    test:
+      exec: flutter test
+      description: Run tests
+      packageFilters:
+        flutter: true
+    format:
+      exec: dart format .
+      description: Format code
+    generate:
+      exec: dart run build_runner build --delete-conflicting-outputs
+      description: Run code generation
+      packageFilters:
+        dependsOn: build_runner
+      select-package:
+        ignore:
+          - app_factory

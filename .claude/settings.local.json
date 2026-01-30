@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:pub.dev)",
+      "WebFetch(domain:melos.invertase.dev)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "Bash(flutter create:*)",
+      "Bash(melos bootstrap:*)",
+      "Bash(dart run build_runner:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(dart pub get:*)",
+      "Bash(flutter pub:*)",
+      "Bash(melos run:*)",
+      "Bash(melos exec:*)",
+      "Bash(flutter clean:*)",
+      "Bash(dart:*)",
+      "Bash(done)",
+      "WebFetch(domain:riverpod.dev)"
+    ]
+  }
+}

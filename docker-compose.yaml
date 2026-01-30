@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: app-factory-postgres
+    environment:
+      POSTGRES_USER: appfactory
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: user_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-factory-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appfactory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: app-factory-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-factory-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-service:
+    build:
+      context: ./server/user-service
+      dockerfile: Dockerfile
+    container_name: app-factory-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/user_db
+      - DATABASE_USERNAME=appfactory
+      - DATABASE_PASSWORD=devpassword
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-secret-key-change-this-in-production-min-256-bits-long-enough
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-factory-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  app-factory-network:
+    driver: bridge
