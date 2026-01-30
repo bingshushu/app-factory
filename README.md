@@ -177,3 +177,4 @@ MIT License
 **最后更新**: 2026-01-30
 
 docker compose up -d --build
+melos run generate
