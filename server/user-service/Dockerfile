@@ -2,7 +2,7 @@
 # 新增微服务时无需修改此文件
 
 # 阶段 1: 构建
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
 
 # 复制整个 server 目录（通过 .dockerignore 排除不需要的文件）
@@ -13,10 +13,14 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -pl user-service -am -DskipTests -q
 
 # 阶段 2: 运行
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21.0.7_6-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S spring && adduser -S spring -G spring
+
+ENV TZ=Asia/Shanghai \
+    LANG=C.UTF-8
+
 USER spring:spring
 
 COPY --from=builder /app/user-service/target/*.jar app.jar
