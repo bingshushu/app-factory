@@ -6,6 +6,56 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 App Factory - 一个用于流水线式生产移动应用的工厂架构。采用 Flutter + Java Spring MVC + PostgreSQL 技术栈，后端为微服务架构，从设计之初即面向 Kubernetes 环境。通过共享组件库实现多 App 快速开发。
 
+---
+
+## 🎯 核心原则：最佳实践优先
+
+**本项目的所有技术决策都遵循"最佳实践优先"原则。** Claude 在本项目中工作时，必须理解并遵循这些原则。
+
+### 原则一：约定优于配置 (Convention over Configuration)
+
+遵循项目既定约定，不要发明新的做法：
+- ✅ 使用 Melos 管理所有 Flutter 操作
+- ✅ 使用 Flyway 管理数据库迁移
+- ✅ 使用 Freezed 定义数据模型
+- ❌ 不要手动运行 `dart pub get`
+- ❌ 不要手写 JSON 序列化代码
+- ❌ 不要直接执行 SQL 修改生产数据库
+
+### 原则二：一致性优于个人偏好
+
+团队一致性比个人习惯更重要：
+- 所有代码使用相同的格式化规则 (`melos run format`)
+- 所有 API 遵循相同的响应格式 (`{ code, message, data }`)
+- 所有错误处理使用相同的模式 (Result 类型)
+- 所有状态管理使用 Riverpod (不混用 Provider/Bloc)
+
+### 原则三：显式优于隐式
+
+代码意图必须清晰明确：
+- 使用 `@riverpod` 注解而非手写 Provider
+- 使用 `sealed class` 定义有限状态集
+- 使用类型注解，避免 `dynamic` 和 `var`
+- 错误信息必须包含上下文，不要只说 "操作失败"
+
+### 原则四：安全优于便捷
+
+安全性不可妥协：
+- JWT Secret 必须从环境变量读取，禁止硬编码
+- 所有用户输入必须验证和清理
+- 数据库密码禁止提交到代码仓库
+- 容器以非 root 用户运行
+
+### 原则五：可测试性优于快速实现
+
+代码必须易于测试：
+- Repository 模式分离数据访问，便于 Mock
+- 依赖注入通过 Riverpod，便于替换
+- 业务逻辑不依赖 UI 框架
+- 每个公共 API 必须有对应测试
+
+---
+
 ## 📁 项目结构
 
 ```
@@ -795,52 +845,65 @@ Melos 会自动发现 workspace 下所有包，无需手动注册。运行 `dart
 
 ## Development Standards
 
-### 技术栈选型
+### 技术栈选型与理由
 
 **Flutter 前端:**
 
-| 类别 | 选型 | 说明 |
-|------|------|------|
-| 状态管理 | Riverpod | 类型安全、可测试、支持代码生成 |
-| 路由 | go_router | 声明式路由、深度链接支持 |
-| 网络请求 | dio | 拦截器、取消请求、错误处理 |
-| 本地存储 | shared_preferences + hive | 简单 KV 用 sp，复杂对象用 hive |
-| 数据模型 | freezed + json_serializable | 不可变模型、自动序列化 |
-| 依赖注入 | Riverpod | 统一使用 Riverpod 管理依赖 |
-| 国际化 | slang | 类型安全的 i18n |
-| 日志 | logger | 格式化日志输出 |
-| WebSocket | web_socket_channel | 长链接通信 |
+| 类别 | 选型 | 为什么选择它 |
+|------|------|-------------|
+| 状态管理 | Riverpod | ✅ 编译时类型安全 ✅ 支持代码生成减少样板 ✅ 自动处理依赖和生命周期 ✅ 易于测试（可 override）|
+| 路由 | go_router | ✅ 声明式路由，URL 与状态同步 ✅ 支持深度链接和 Web ✅ 类型安全的路径参数 |
+| 网络请求 | dio | ✅ 拦截器机制便于统一处理 Token/错误 ✅ 支持请求取消 ✅ 丰富的配置选项 |
+| 本地存储 | shared_preferences + hive | ✅ sp 简单轻量适合 KV ✅ hive 高性能适合复杂对象 ✅ 都支持加密存储 |
+| 数据模型 | freezed + json_serializable | ✅ 不可变性保证状态安全 ✅ 自动生成 copyWith/==/hashCode ✅ JSON 序列化零样板 |
+| 依赖注入 | Riverpod | ✅ 与状态管理统一 ✅ 编译时依赖检查 ✅ 支持作用域和覆盖 |
+| 国际化 | slang | ✅ 类型安全的翻译键 ✅ 编译时检查缺失翻译 ✅ 支持复数和性别 |
+| 日志 | logger | ✅ 格式化输出易读 ✅ 支持日志级别 ✅ 轻量无依赖 |
+| WebSocket | web_socket_channel | ✅ 官方维护 ✅ 跨平台一致 ✅ 支持 Stream API |
+
+**为什么不选其他方案：**
+- ❌ **Provider**：Riverpod 是其作者的改进版，类型更安全，无 BuildContext 依赖
+- ❌ **Bloc**：样板代码多，Event/State 分离对简单场景过度设计
+- ❌ **GetX**：隐式依赖多，全局状态难以追踪和测试
+- ❌ **http 包**：功能简单，缺少拦截器、取消请求等必要特性
 
 **Java 后端:**
 
-| 类别 | 选型 | 说明 |
-|------|------|------|
-| 框架 | Spring Boot 3.x + Spring MVC | REST API 开发 |
-| 数据库 | PostgreSQL | 主数据库 |
-| ORM | Spring Data JPA (Hibernate) | 数据访问层 |
-| 数据库迁移 | Flyway | 版本化 schema 管理 |
-| 缓存 | Redis (Spring Data Redis) | 会话、缓存、消息队列 |
-| 认证 | Spring Security + JWT | 无状态认证 |
-| 对象映射 | MapStruct | Entity/DTO 转换 |
-| API 文档 | SpringDoc OpenAPI (Swagger) | 自动生成 API 文档 |
-| WebSocket | Spring WebSocket + STOMP | 长链接服务 |
-| 文件存储 | MinIO (S3 兼容) | 对象存储 |
-| 消息队列 | Redis Pub/Sub (轻量) / RabbitMQ (重度) | 服务间异步通信 |
-| 日志 | SLF4J + Logback | 结构化日志，输出 JSON 格式便于 K8s 采集 |
-| 构建工具 | Maven | 多模块项目管理 |
-| 容器化 | Docker + Jib (可选) | 镜像构建 |
+| 类别 | 选型 | 为什么选择它 |
+|------|------|-------------|
+| 框架 | Spring Boot 3.x + Spring MVC | ✅ 行业标准，生态完善 ✅ 自动配置减少样板 ✅ 原生支持 GraalVM |
+| 数据库 | PostgreSQL | ✅ 功能强大（JSON、全文搜索）✅ 开源免费 ✅ 云厂商广泛支持 |
+| ORM | Spring Data JPA | ✅ Repository 抽象简洁 ✅ 自动生成查询 ✅ 事务管理完善 |
+| 数据库迁移 | Flyway | ✅ 版本化迁移脚本 ✅ 自动执行 ✅ 支持回滚 |
+| 缓存 | Redis | ✅ 高性能 ✅ 数据结构丰富 ✅ 支持分布式锁和消息 |
+| 认证 | Spring Security + JWT | ✅ 无状态可水平扩展 ✅ 标准化协议 ✅ 与 Spring 深度集成 |
+| 对象映射 | MapStruct | ✅ 编译时生成代码 ✅ 零反射高性能 ✅ 类型安全 |
+| API 文档 | SpringDoc OpenAPI | ✅ 自动生成 Swagger UI ✅ 与代码同步 ✅ 支持导出 |
+| 文件存储 | MinIO | ✅ S3 兼容 API ✅ 自托管可控 ✅ 高性能 |
+| 日志 | SLF4J + Logback | ✅ 行业标准 ✅ 支持 JSON 格式 ✅ 与 K8s 日志采集兼容 |
+
+**为什么不选其他方案：**
+- ❌ **MyBatis**：手写 SQL 维护成本高，JPA 对 CRUD 场景更高效
+- ❌ **WebFlux**：响应式编程学习曲线陡峭，团队不熟悉
+- ❌ **Session 认证**：有状态，难以水平扩展
+- ❌ **ModelMapper/Dozer**：运行时反射，性能差且类型不安全
 
 **部署与基础设施:**
 
-| 类别 | 选型 | 说明 |
-|------|------|------|
-| 编排 | Kubernetes | 容器编排和服务管理 |
-| 部署配置 | Kustomize | 多环境差异化部署 |
-| 本地开发 | Docker Compose + Skaffold | 本地快速启动 |
-| 网关 | Spring Cloud Gateway | API 路由、限流、鉴权 |
-| 服务发现 | K8s Service DNS | 内建服务发现，无需额外组件 |
-| 配置管理 | K8s ConfigMap + Secret | 环境配置注入 |
-| 监控 | Prometheus + Grafana (可选) | 指标采集和可视化 |
+| 类别 | 选型 | 为什么选择它 |
+|------|------|-------------|
+| 编排 | Kubernetes | ✅ 行业标准 ✅ 自动扩缩容 ✅ 自愈能力 ✅ 声明式配置 |
+| 部署配置 | Kustomize | ✅ K8s 原生 ✅ 无模板语法 ✅ 易于理解和维护 |
+| 本地开发 | Docker Compose + Skaffold | ✅ 快速启动完整环境 ✅ 热重载 ✅ 与生产环境一致 |
+| 网关 | Spring Cloud Gateway | ✅ 与 Spring 生态集成 ✅ 响应式高性能 ✅ 丰富的过滤器 |
+| 服务发现 | K8s Service DNS | ✅ 无额外组件 ✅ 零配置 ✅ 自动负载均衡 |
+| 配置管理 | K8s ConfigMap + Secret | ✅ 原生支持 ✅ 支持热更新 ✅ 加密存储敏感信息 |
+| 监控 | Prometheus + Grafana | ✅ 云原生标准 ✅ 强大的查询语言 ✅ 丰富的可视化 |
+
+**为什么不选其他方案：**
+- ❌ **Eureka/Nacos**：K8s 内建服务发现，无需额外组件
+- ❌ **Spring Cloud Config**：K8s ConfigMap 更轻量，与部署环境一致
+- ❌ **Helm**：对简单项目过于复杂，Kustomize 更直观
 
 ### 核心依赖版本
 

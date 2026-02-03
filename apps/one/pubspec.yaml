@@ -31,6 +31,9 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.8
 
+  # 日志
+  logger: ^2.2.0
+
 dev_dependencies:
   flutter_lints: ^6.0.0
   riverpod_generator: ^4.0.2

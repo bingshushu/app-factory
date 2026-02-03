@@ -123,23 +123,19 @@ Logger logger(Ref ref) {
       colors: true,
       printEmojis: true,
     ),
+    output: MultiOutput([
+      ConsoleOutput(),
+      // 文件日志输出将在应用层通过 override 添加
+    ]),
   );
 }
 
+// ApiClient Provider 声明
+// ⚠️ 必须在应用层 (apps/*/main.dart) 通过 overrideWith 提供实际实现
 @riverpod
 ApiClient apiClient(Ref ref) {
-  final logger = ref.watch(loggerProvider);
-
-  // TODO: 从环境变量或配置中读取 baseUrl
-  const baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://192.168.1.245:8080',
-  );
-
-  // getAccessToken 将在 core 包中通过 override 提供
-  return ApiClient(
-    baseUrl: baseUrl,
-    logger: logger,
-    getAccessToken: () => null, // 默认返回 null，需要在 core 中 override
+  throw UnimplementedError(
+    'apiClientProvider must be overridden in main() with actual implementation. '
+    'See apps/*/lib/main.dart for example.',
   );
 }

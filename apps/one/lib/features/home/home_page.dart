@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/auth/auth_state.dart';
 import 'package:auth_ui/auth_ui.dart';
+import '../logs/logs_page.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -15,6 +16,18 @@ class HomePage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('首页'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.description),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LogsPage(),
+                ),
+              );
+            },
+            tooltip: '日志管理',
+          ),
           IconButton(
             icon: logoutState.isLoading
                 ? const SizedBox(

@@ -154,23 +154,9 @@ TokenStorage tokenStorage(Ref ref) {
   return TokenStorage(prefs);
 }
 
-// Override ApiClient Provider 以注入 token 获取函数
-@riverpod
-ApiClient apiClient(Ref ref) {
-  final logger = ref.watch(loggerProvider);
-  final tokenStorage = ref.watch(tokenStorageProvider);
-
-  const baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://192.168.1.245:8081',
-  );
-
-  return ApiClient(
-    baseUrl: baseUrl,
-    logger: logger,
-    getAccessToken: () => tokenStorage.getAccessToken(),
-  );
-}
+// ⚠️ ApiClient Provider 已移除
+// 应该在应用层 (apps/*/main.dart) 通过 ProviderScope.overrides 创建
+// 避免在共享包中定义具体的 Provider 实现
 
 // AuthRepository Provider - 同步创建
 @riverpod
